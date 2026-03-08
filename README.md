@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Portail Officiel - Ville de Niamey
 
-## Getting Started
+Site web moderne construit avec **Next.js 16**, **Prisma** et **PostgreSQL**.
 
-First, run the development server:
+## Sections publiques
+
+- `Accueil`
+- `Actualité`
+- `Naneye Yarda`
+- `Naneye Yarda Service` (portail des démarches)
+- `Le centenaire`
+- `Contact`
+
+Le design est en mode clair avec une palette orange/vert inspirée du drapeau du Niger, des animations de reveal et un carrousel animé sur l'accueil.
+
+## Panel admin (full gestion)
+
+Routes principales:
+
+- `/admin/login` : authentification
+- `/admin` : tableau de bord
+- `/admin/config-accueil` : configuration hero + SEO + slider
+- `/admin/media` : import d'images (bibliothèque média)
+- `/admin/actualites` : gestion actualités + image mise en avant + SEO
+- `/admin/evenements` : gestion événements + image, galerie, géolocalisation, SEO
+- `/admin/utilisateurs` : gestion des comptes admin (super admin)
+- `/admin/logs` : logs d'activité
+- `/admin/messages` : messages du formulaire contact
+
+Le panel admin est protégé par session cookie HTTP-only signée.
+
+## Stack
+
+- Next.js (App Router)
+- React + TypeScript
+- Tailwind CSS v4
+- Framer Motion
+- Prisma ORM
+- PostgreSQL
+
+## Installation
+
+```bash
+npm install
+cp .env.example .env
+npm run db:generate
+```
+
+## Variables d'environnement
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/niamey_portal?schema=public"
+ADMIN_EMAIL="superadmin@niamey.ne"
+ADMIN_NAME="Super Admin Ville de Niamey"
+ADMIN_PASSWORD="mot-de-passe-fort"
+ADMIN_SECRET="secret-signature-session"
+```
+
+## Base de données
+
+```bash
+npm run db:push
+npm run db:seed
+```
+
+`npm run db:seed` crée/met à jour:
+
+- la configuration d'accueil,
+- les slides,
+- des actualités et événements de démarrage,
+- le compte super admin défini par `ADMIN_EMAIL` + `ADMIN_PASSWORD`.
+
+## Démarrage local
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Site accessible sur `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API contact
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Endpoint: `POST /api/contact`
+- Enregistre les messages dans `ContactMessage`
+- Validation des champs (nom, email, sujet, message)
 
-## Learn More
+## Scripts utiles
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run dev         # mode développement
+npm run build       # build production
+npm run start       # lancer la build
+npm run lint        # vérification ESLint
+npm run db:generate # générer Prisma Client
+npm run db:push     # pousser le schéma vers PostgreSQL
+npm run db:studio   # ouvrir Prisma Studio
+npm run db:seed     # injecter/mettre à jour les données initiales
+```
