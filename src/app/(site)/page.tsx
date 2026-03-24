@@ -4,7 +4,6 @@ import Link from "next/link";
 import { EventCountdown } from "@/components/event-countdown";
 import { HomeCarousel } from "@/components/home-carousel";
 import { Reveal } from "@/components/reveal";
-import { getUpcomingEvents } from "@/lib/events";
 import { getHomepageData, getHomepageMetadata } from "@/lib/homepage";
 import { getLatestNews } from "@/lib/news";
 import { actualitePhotos } from "@/lib/media";
@@ -63,6 +62,22 @@ const impactFigures: ImpactFigure[] = [
     detail: "Tournées hebdomadaires de collecte et de curage renforcées.",
   },
 ];
+
+const featuredEvent = {
+  title: "Journée de salubrité publique",
+  edition: "23ème édition",
+  targetDate: "2026-03-29T08:00:00+01:00",
+  location: "Grandes artères et secteurs de nettoyage des 5 arrondissements de Niamey",
+  message: "La Propreté de la Capitale C'est l'Affaire de Tous",
+  callout: "Mobilisons-nous pour la salubrité et le désencombrement de nos grandes artères.",
+  sectors: [
+    "ACN 1 : Rond-point Sikiyé - Rond-point Gadafawa - Rond-point cimetière - Koubia poste.",
+    "ACN 2 : Rond-point Sikiyé - Échangeur Mali Bero - Rond-point Francophonie - Koira Tegui.",
+    "ACN 3 : STM-Bonkaney - Rond-point Kokorobado.",
+    "ACN 4 : Rond-point 6ème - route Aéroport.",
+    "ACN 5 : Rond-point Liptako - Say Tessam - Rond-point Saguia - route Say.",
+  ],
+};
 
 function ImpactIcon({ icon }: { icon: ImpactIconName }) {
   const commonProps = {
@@ -126,8 +141,6 @@ function ImpactIcon({ icon }: { icon: ImpactIconName }) {
 export default async function Home() {
   const homepageData = await getHomepageData();
   const latestNews = await getLatestNews(6);
-  const upcomingEvents = await getUpcomingEvents(2);
-  const headEvent = upcomingEvents[0];
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-20 sm:px-6 lg:px-8">
@@ -190,98 +203,59 @@ export default async function Home() {
           <Reveal className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[rgba(255,206,161,0.95)]">
-                Événements à venir
+                Événement à venir
               </p>
-              <h2 className="display-font mt-2 text-2xl font-extrabold text-white sm:text-3xl">Agenda municipal 2026</h2>
+              <h2 className="display-font mt-2 text-2xl font-extrabold text-white sm:text-3xl">
+                Journée de salubrité publique
+              </h2>
             </div>
-            <Link href="/centenaire" className="btn-primary px-5 py-2 text-sm">
-              Voir le programme du centenaire
-            </Link>
+            <span className="rounded-full border border-white/24 bg-white/12 px-4 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
+              {featuredEvent.edition}
+            </span>
           </Reveal>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            {headEvent ? (
-              <Reveal>
-                <EventCountdown
-                  targetDate={headEvent.startAt.toISOString()}
-                  title={headEvent.title}
-                  location={headEvent.location}
-                />
-              </Reveal>
-            ) : null}
+          <div className="mt-6 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+            <Reveal>
+              <EventCountdown
+                targetDate={featuredEvent.targetDate}
+                title={featuredEvent.title}
+                location={featuredEvent.location}
+              />
+            </Reveal>
 
-            <div className="space-y-3">
-              {upcomingEvents.map((event, index) => (
-                <Reveal
-                  key={event.id}
-                  delay={index * 0.07}
-                  className="rounded-xl border border-white/22 bg-white/12 p-4 text-white backdrop-blur-md"
-                >
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M8 2v4M16 2v4" />
-                      <rect x="3" y="5" width="18" height="16" rx="2" />
-                      <path d="M3 10h18" />
-                    </svg>
-                    {new Intl.DateTimeFormat("fr-FR", {
-                      dateStyle: "long",
-                      timeStyle: "short",
-                    }).format(event.startAt)}
-                  </div>
+            <Reveal className="rounded-2xl border border-white/22 bg-white/12 p-5 text-white backdrop-blur-md sm:p-6">
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
+                  Dimanche 29 mars 2026
+                </span>
+                <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
+                  Dès 08h00
+                </span>
+              </div>
 
-                  <h3 className="mt-2 text-base font-extrabold text-white sm:text-lg">{event.title}</h3>
+              <h3 className="mt-4 text-2xl leading-tight font-extrabold text-white sm:text-3xl">
+                {featuredEvent.message}
+              </h3>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/90 sm:text-base">
+                {featuredEvent.callout}
+              </p>
 
-                  <p className="mt-2 flex items-center gap-2 text-sm text-white/90">
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" />
-                      <circle cx="12" cy="11" r="2.5" />
-                    </svg>
-                    {event.location}
-                  </p>
-
-                  {typeof event.latitude === "number" && typeof event.longitude === "number" ? (
-                    <a
-                      href={`https://www.google.com/maps?q=${event.latitude},${event.longitude}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,211,174,0.95)] transition hover:text-white"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" />
-                        <path d="M8 11h8M12 7v8" />
-                      </svg>
-                      Ouvrir la géolocalisation
-                    </a>
-                  ) : null}
-
-                  <p className="mt-2 text-sm leading-6 text-white/85">{event.detail}</p>
-                </Reveal>
-              ))}
-            </div>
+              <div className="mt-6 rounded-xl border border-white/18 bg-black/18 p-4 sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[rgba(255,211,174,0.95)]">
+                  Secteurs de nettoyage
+                </p>
+                <div className="mt-4 space-y-3">
+                  {featuredEvent.sectors.map((sector, index) => (
+                    <div key={sector} className="flex items-start gap-3">
+                      <span className="mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[rgba(240,122,20,0.24)] text-xs font-bold text-white">
+                        {index + 1}
+                      </span>
+                      <p className="text-sm leading-6 text-white/92">{sector}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Reveal>
           </div>
         </div>
       </section>

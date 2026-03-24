@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 const links = [
   { label: "Accueil", href: "/" },
+  { label: "Plan stratégique", href: "/plan-strategique" },
   { label: "Actualité", href: "/actualite" },
   { label: "Naneye Yarda", href: "/naneye-yarda" },
   { label: "Le centenaire", href: "/centenaire" },

@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 const usefulLinks = [
+  { href: "/plan-strategique", label: "Plan stratégique 2025-2027" },
   { href: "/actualite", label: "Actualités municipales" },
   { href: "/centenaire", label: "Programme du centenaire" },
   { href: "/naneye-yarda/services", label: "Services municipaux" },
