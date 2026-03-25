@@ -1,8 +1,10 @@
-import Image from "next/image";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArticleBlockRenderer } from "@/components/article-block-renderer";
+import { ArticleShareButtons } from "@/components/article-share-buttons";
+import { PreviewableArticleImage } from "@/components/previewable-article-image";
 import { Reveal } from "@/components/reveal";
 import { getNewsBySlug, getLatestNews } from "@/lib/news";
 import { formatFrenchDate } from "@/lib/utils";
@@ -35,6 +37,14 @@ export async function generateStaticParams() {
   return items.map((item) => ({ slug: item.slug }));
 }
 
+function getRequestOrigin(headerStore: Headers) {
+  const forwardedHost = headerStore.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || headerStore.get("host")?.split(",")[0]?.trim() || "localhost:3000";
+  const forwardedProto = headerStore.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  return `${protocol}://${host}`;
+}
+
 export default async function ActualiteDetailPage({ params }: ActualiteDetailPageProps) {
   const { slug } = await params;
   const article = await getNewsBySlug(slug);
@@ -42,12 +52,14 @@ export default async function ActualiteDetailPage({ params }: ActualiteDetailPag
     notFound();
   }
 
+  const headerStore = await headers();
+  const articleUrl = `${getRequestOrigin(headerStore)}/actualite/${article.slug}`;
   const heroImage = article.featuredImage || article.gallery?.[0]?.imagePath;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-20 sm:px-6 lg:px-8">
       <section className="py-12 lg:py-16">
-        <Reveal>
+        <Reveal className="mx-auto max-w-3xl">
           <Link href="/actualite" className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)] hover:text-[var(--orange-strong)]">
             Actualité / retour à la liste
           </Link>
@@ -58,49 +70,52 @@ export default async function ActualiteDetailPage({ params }: ActualiteDetailPag
           <h1 className="display-font mt-2 text-4xl leading-tight font-extrabold text-[var(--green-deep)] sm:text-5xl">
             {article.title}
           </h1>
-          <p className="mt-4 text-sm leading-8 text-[var(--muted)]">{article.excerpt}</p>
+          <p className="mt-4 text-justify text-sm leading-8 text-[var(--muted)]">{article.excerpt}</p>
           <p className="mt-4 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
             {formatFrenchDate(article.publishedAt)} - {article.location}
           </p>
         </Reveal>
 
         {heroImage ? (
-          <Reveal className="mt-8 overflow-hidden rounded-2xl border border-[var(--line)]">
-            <Image
+          <Reveal className="mx-auto mt-8 max-w-3xl">
+            <PreviewableArticleImage
               src={heroImage}
               alt={article.title}
               width={1600}
               height={1000}
-              className="h-auto w-full object-cover"
+              priority
+              imageClassName="max-h-[34rem] w-auto"
             />
           </Reveal>
         ) : null}
 
-        <Reveal className="mt-10">
-          <ArticleBlockRenderer content={article.content} />
+        <Reveal className="mx-auto mt-10 max-w-3xl [&_p]:text-justify">
+          <ArticleBlockRenderer content={article.content} mediaFit="contain" />
         </Reveal>
 
         {article.gallery && article.gallery.length > 0 ? (
-          <section className="mt-12">
-            <Reveal>
-              <h2 className="text-2xl font-extrabold text-[var(--green-deep)]">Galerie</h2>
-            </Reveal>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <section className="mx-auto mt-12 max-w-4xl">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {article.gallery.map((image, index) => (
                 <Reveal key={image.id} delay={index * 0.05} className="overflow-hidden rounded-xl border border-[var(--line)] bg-white">
-                  <Image
+                  <PreviewableArticleImage
                     src={image.imagePath}
                     alt={image.caption || article.title}
                     width={900}
                     height={600}
-                    className="h-44 w-full object-cover"
+                    imageClassName="max-h-[18rem] w-auto"
+                    frameClassName="rounded-none border-0 bg-transparent"
+                    caption={image.caption}
                   />
-                  {image.caption ? <p className="px-3 py-2 text-xs text-[var(--muted)]">{image.caption}</p> : null}
                 </Reveal>
               ))}
             </div>
           </section>
         ) : null}
+
+        <Reveal className="mx-auto mt-10 max-w-3xl">
+          <ArticleShareButtons title={article.title} url={articleUrl} />
+        </Reveal>
       </section>
     </main>
   );

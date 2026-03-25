@@ -3,7 +3,15 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logAdminActivity } from "@/lib/activity-log";
-import { ensureDatabaseConfigured, requireAdmin } from "@/lib/admin-auth";
+import {
+  compactArticleBlocks,
+  createGalleryImage,
+  getArticleBlockGalleryInputName,
+  getArticleBlockImageInputName,
+  parseArticleBlocks,
+  serializeArticleBlocks,
+} from "@/lib/article-blocks";
+import { requireAdmin } from "@/lib/admin-auth";
 import { AdminBlockEditor } from "@/components/admin-block-editor";
 import { AdminDeleteDialog } from "@/components/admin-delete-dialog";
 import { AdminImageUploadInput } from "@/components/admin-image-upload-input";
@@ -54,11 +62,54 @@ function parseContentStatus(value: FormDataEntryValue | null): ContentStatus {
   return ContentStatus.PUBLISHED;
 }
 
+async function hydrateArticleContent(content: string, formData: FormData, slug: string) {
+  const blocks = parseArticleBlocks(content);
+
+  for (const [index, block] of blocks.entries()) {
+    if (block.type === "image") {
+      const fileEntry = formData.get(getArticleBlockImageInputName(block.id));
+      if (fileEntry instanceof File && fileEntry.size > 0) {
+        block.url = (await saveUploadedImage(fileEntry, `${slug}-bloc-${index + 1}-image`)) ?? block.url ?? "";
+      }
+      continue;
+    }
+
+    if (block.type === "gallery") {
+      const files = formData.getAll(getArticleBlockGalleryInputName(block.id));
+      let appendIndex = block.images.length;
+
+      for (const entry of files) {
+        if (!(entry instanceof File) || entry.size === 0) {
+          continue;
+        }
+
+        const imagePath = await saveUploadedImage(entry, `${slug}-bloc-${index + 1}-gallery-${appendIndex + 1}`);
+        if (!imagePath) {
+          continue;
+        }
+
+        block.images = [
+          ...block.images,
+          createGalleryImage({
+            url: imagePath,
+          }),
+        ];
+        appendIndex += 1;
+      }
+    }
+  }
+
+  const compacted = compactArticleBlocks(blocks);
+  return compacted.length > 0 ? serializeArticleBlocks(compacted) : null;
+}
+
 async function createActualiteAction(formData: FormData) {
   "use server";
 
   await requireAdmin();
-  ensureDatabaseConfigured();
+  if (!process.env.DATABASE_URL) {
+    return redirect("/admin/actualites?error=no-database");
+  }
 
   const title = String(formData.get("title") ?? "").trim();
   const slugInput = String(formData.get("slug") ?? "").trim();
@@ -73,39 +124,63 @@ async function createActualiteAction(formData: FormData) {
   const category = String(formData.get("category") ?? NewsCategory.ACTUALITE) as NewsCategory;
   const status = parseContentStatus(formData.get("status"));
 
+  // Track redirect destination - call redirect only at the end
+  let redirectUrl = "/admin/actualites?status=created";
+
   if (!title || !excerpt || !location) {
-    redirect("/admin/actualites?error=missing");
+    return redirect("/admin/actualites?error=missing");
   }
 
   const slug = slugify(slugInput || title);
   if (!slug) {
-    redirect("/admin/actualites?error=slug");
+    return redirect("/admin/actualites?error=slug");
+  }
+
+  let normalizedContent: string | null = null;
+  let contentError = false;
+  try {
+    normalizedContent = await hydrateArticleContent(content, formData, slug);
+  } catch {
+    contentError = true;
+  }
+  if (contentError) {
+    return redirect("/admin/actualites?error=content-media");
   }
 
   let featuredImage = "";
+  let imageError = false;
   if (featuredImageFile instanceof File && featuredImageFile.size > 0) {
     try {
       featuredImage = (await saveUploadedImage(featuredImageFile, `${slug}-a-la-une`)) ?? "";
     } catch {
-      redirect("/admin/actualites?error=image");
+      imageError = true;
     }
+  }
+  if (imageError) {
+    return redirect("/admin/actualites?error=image");
   }
 
   let publishedAt: Date;
+  let dateError = false;
   try {
     publishedAt = parsePublishedDate(formData.get("publishedAt"));
   } catch {
-    redirect("/admin/actualites?error=date");
+    dateError = true;
+    publishedAt = new Date();
+  }
+  if (dateError) {
+    return redirect("/admin/actualites?error=date");
   }
 
   let createdId = "";
+  let createError = false;
   try {
     const created = await prisma.actualite.create({
       data: {
         title,
         slug,
         excerpt,
-        content: content || null,
+        content: normalizedContent,
         featuredImage: featuredImage || null,
         category,
         status,
@@ -139,7 +214,11 @@ async function createActualiteAction(formData: FormData) {
       sortOrder += 1;
     }
   } catch {
-    redirect("/admin/actualites?error=create");
+    createError = true;
+  }
+
+  if (createError) {
+    return redirect("/admin/actualites?error=create");
   }
 
   await logAdminActivity({
@@ -153,14 +232,16 @@ async function createActualiteAction(formData: FormData) {
   revalidatePath("/actualite");
   revalidatePath("/admin");
   revalidatePath("/admin/actualites");
-  redirect("/admin/actualites?status=created");
+  return redirect(redirectUrl);
 }
 
 async function updateActualiteAction(formData: FormData) {
   "use server";
 
   await requireAdmin();
-  ensureDatabaseConfigured();
+  if (!process.env.DATABASE_URL) {
+    return redirect("/admin/actualites?error=no-database");
+  }
 
   const id = String(formData.get("id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
@@ -177,30 +258,51 @@ async function updateActualiteAction(formData: FormData) {
   const status = parseContentStatus(formData.get("status"));
 
   if (!id || !title || !excerpt || !location) {
-    redirect("/admin/actualites?error=missing");
+    return redirect("/admin/actualites?error=missing");
   }
 
   const slug = slugify(slugInput || title);
   if (!slug) {
-    redirect("/admin/actualites?error=slug");
+    return redirect("/admin/actualites?error=slug");
+  }
+
+  let normalizedContent: string | null = null;
+  let contentError = false;
+  try {
+    normalizedContent = await hydrateArticleContent(content, formData, slug);
+  } catch {
+    contentError = true;
+  }
+  if (contentError) {
+    return redirect(`/admin/actualites?error=content-media&edit=${id}`);
   }
 
   let featuredImage = currentFeaturedImage;
+  let imageError = false;
   if (featuredImageFile instanceof File && featuredImageFile.size > 0) {
     try {
       featuredImage = (await saveUploadedImage(featuredImageFile, `${slug}-a-la-une`)) ?? currentFeaturedImage;
     } catch {
-      redirect("/admin/actualites?error=image");
+      imageError = true;
     }
+  }
+  if (imageError) {
+    return redirect("/admin/actualites?error=image");
   }
 
   let publishedAt: Date;
+  let dateError = false;
   try {
     publishedAt = parsePublishedDate(formData.get("publishedAt"));
   } catch {
-    redirect("/admin/actualites?error=date");
+    dateError = true;
+    publishedAt = new Date();
+  }
+  if (dateError) {
+    return redirect("/admin/actualites?error=date");
   }
 
+  let updateError = false;
   try {
     await prisma.actualite.update({
       where: { id },
@@ -208,7 +310,7 @@ async function updateActualiteAction(formData: FormData) {
         title,
         slug,
         excerpt,
-        content: content || null,
+        content: normalizedContent,
         featuredImage: featuredImage || null,
         category,
         status,
@@ -220,7 +322,11 @@ async function updateActualiteAction(formData: FormData) {
       },
     });
   } catch {
-    redirect("/admin/actualites?error=update");
+    updateError = true;
+  }
+
+  if (updateError) {
+    return redirect("/admin/actualites?error=update");
   }
 
   await logAdminActivity({
@@ -234,20 +340,22 @@ async function updateActualiteAction(formData: FormData) {
   revalidatePath("/actualite");
   revalidatePath("/admin");
   revalidatePath("/admin/actualites");
-  redirect(`/admin/actualites?status=updated&edit=${id}`);
+  return redirect(`/admin/actualites?status=updated&edit=${id}`);
 }
 
 async function addActualiteGalleryImagesAction(formData: FormData) {
   "use server";
 
   await requireAdmin();
-  ensureDatabaseConfigured();
+  if (!process.env.DATABASE_URL) {
+    return redirect("/admin/actualites?error=no-database");
+  }
 
   const actualiteId = String(formData.get("actualiteId") ?? "").trim();
   const files = formData.getAll("galleryFiles");
 
   if (!actualiteId || files.length === 0) {
-    redirect("/admin/actualites?error=gallery-missing");
+    return redirect("/admin/actualites?error=gallery-missing");
   }
 
   const article = await prisma.actualite.findUnique({
@@ -256,7 +364,7 @@ async function addActualiteGalleryImagesAction(formData: FormData) {
   });
 
   if (!article) {
-    redirect("/admin/actualites?error=gallery-article");
+    return redirect("/admin/actualites?error=gallery-article");
   }
 
   const maxSort = await prisma.actualiteGalleryImage.findFirst({
@@ -296,19 +404,21 @@ async function addActualiteGalleryImagesAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/actualite");
   revalidatePath("/admin/actualites");
-  redirect(`/admin/actualites?status=gallery-added&edit=${actualiteId}`);
+  return redirect(`/admin/actualites?status=gallery-added&edit=${actualiteId}`);
 }
 
 async function deleteActualiteGalleryImageAction(formData: FormData) {
   "use server";
 
   await requireAdmin();
-  ensureDatabaseConfigured();
+  if (!process.env.DATABASE_URL) {
+    return redirect("/admin/actualites?error=no-database");
+  }
 
   const id = String(formData.get("id") ?? "").trim();
   const actualiteIdFromForm = String(formData.get("actualiteId") ?? "").trim();
   if (!id) {
-    redirect("/admin/actualites?error=gallery-delete");
+    return redirect("/admin/actualites?error=gallery-delete");
   }
 
   let actualiteId = actualiteIdFromForm;
@@ -320,7 +430,17 @@ async function deleteActualiteGalleryImageAction(formData: FormData) {
     actualiteId = existing?.actualiteId ?? "";
   }
 
-  await prisma.actualiteGalleryImage.delete({ where: { id } });
+  let deleteError = false;
+  try {
+    await prisma.actualiteGalleryImage.delete({ where: { id } });
+  } catch {
+    deleteError = true;
+  }
+
+  if (deleteError) {
+    return redirect("/admin/actualites?error=gallery-delete");
+  }
+
   await logAdminActivity({
     action: "delete",
     entityType: "actualite_gallery_image",
@@ -330,26 +450,33 @@ async function deleteActualiteGalleryImageAction(formData: FormData) {
 
   revalidatePath("/admin/actualites");
   if (actualiteId) {
-    redirect(`/admin/actualites?status=gallery-deleted&edit=${actualiteId}`);
+    return redirect(`/admin/actualites?status=gallery-deleted&edit=${actualiteId}`);
   }
-  redirect("/admin/actualites?status=gallery-deleted");
+  return redirect("/admin/actualites?status=gallery-deleted");
 }
 
 async function deleteActualiteAction(formData: FormData) {
   "use server";
 
   await requireAdmin();
-  ensureDatabaseConfigured();
+  if (!process.env.DATABASE_URL) {
+    return redirect("/admin/actualites?error=no-database");
+  }
 
   const id = String(formData.get("id") ?? "");
   if (!id) {
-    redirect("/admin/actualites?error=delete");
+    return redirect("/admin/actualites?error=delete");
   }
 
+  let deleteError = false;
   try {
     await prisma.actualite.delete({ where: { id } });
   } catch {
-    redirect("/admin/actualites?error=delete");
+    deleteError = true;
+  }
+
+  if (deleteError) {
+    return redirect("/admin/actualites?error=delete");
   }
 
   await logAdminActivity({
@@ -363,7 +490,7 @@ async function deleteActualiteAction(formData: FormData) {
   revalidatePath("/actualite");
   revalidatePath("/admin");
   revalidatePath("/admin/actualites");
-  redirect("/admin/actualites?status=deleted");
+  return redirect("/admin/actualites?status=deleted");
 }
 
 async function getActualites(editId: string) {

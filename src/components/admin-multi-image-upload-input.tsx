@@ -22,6 +22,16 @@ export function AdminMultiImageUploadInput({
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  function syncInputFiles(files: File[]) {
+    if (!inputRef.current) {
+      return;
+    }
+
+    const transfer = new DataTransfer();
+    files.forEach((file) => transfer.items.add(file));
+    inputRef.current.files = transfer.files;
+  }
+
   useEffect(
     () => () => {
       entries.forEach((e) => URL.revokeObjectURL(e.objectUrl));
@@ -34,21 +44,25 @@ export function AdminMultiImageUploadInput({
     const newEntries: FileEntry[] = files
       .filter((f) => f.type.startsWith("image/"))
       .map((file) => ({ file, objectUrl: URL.createObjectURL(file) }));
-    setEntries((prev) => [...prev, ...newEntries]);
+    setEntries((prev) => {
+      const next = [...prev, ...newEntries];
+      syncInputFiles(next.map((entry) => entry.file));
+      return next;
+    });
   }
 
   function removeEntry(index: number) {
     setEntries((prev) => {
       URL.revokeObjectURL(prev[index].objectUrl);
-      return prev.filter((_, i) => i !== index);
+      const next = prev.filter((_, i) => i !== index);
+      syncInputFiles(next.map((entry) => entry.file));
+      return next;
     });
   }
 
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.currentTarget.files ?? []);
     handleFiles(files);
-    // Reset so the same file can be re-selected after removal
-    event.currentTarget.value = "";
   }
 
   function handleDrop(event: React.DragEvent<HTMLDivElement>) {
@@ -77,7 +91,7 @@ export function AdminMultiImageUploadInput({
         </svg>
         <div>
           <p className="text-sm font-semibold text-[#475467]">Cliquer ou déposer des images ici</p>
-          <p className="text-xs text-[#98a2b3]">JPG, PNG, WebP, AVIF — plusieurs fichiers acceptés</p>
+          <p className="text-xs text-[#98a2b3]">JPG, PNG, WebP, AVIF — plusieurs fichiers acceptés, jusqu&apos;à 8 Mo par image</p>
         </div>
         {/* Hidden file input — name submitted for each selected file */}
         <input
