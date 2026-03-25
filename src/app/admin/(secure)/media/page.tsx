@@ -7,7 +7,7 @@ import { logAdminActivity } from "@/lib/activity-log";
 import { ensureDatabaseConfigured, requireAdmin } from "@/lib/admin-auth";
 import { AdminImageUploadInput } from "@/components/admin-image-upload-input";
 import { prisma } from "@/lib/prisma";
-import { slugify } from "@/lib/utils";
+import { isUploadedAssetPath, slugify } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -201,6 +201,7 @@ export default async function AdminMediaPage({ searchParams }: MediaPageProps) {
                 src={asset.filePath}
                 alt={asset.altText || asset.title}
                 fill
+                unoptimized={isUploadedAssetPath(asset.filePath)}
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 33vw"
               />

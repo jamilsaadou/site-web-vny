@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, isUploadedAssetPath } from "@/lib/utils";
 
 type PreviewableArticleImageProps = {
   src: string;
@@ -26,6 +26,7 @@ export function PreviewableArticleImage({
   priority = false,
 }: PreviewableArticleImageProps) {
   const [open, setOpen] = useState(false);
+  const unoptimized = isUploadedAssetPath(src);
 
   useEffect(() => {
     if (!open) {
@@ -59,6 +60,7 @@ export function PreviewableArticleImage({
           width={width}
           height={height}
           priority={priority}
+          unoptimized={unoptimized}
           className={cn("mx-auto h-auto max-w-full object-contain", imageClassName)}
         />
       </button>
@@ -91,6 +93,7 @@ export function PreviewableArticleImage({
               width={width}
               height={height}
               priority
+              unoptimized={unoptimized}
               className="max-h-[88vh] w-auto max-w-full rounded-2xl object-contain"
             />
             {caption ? (

@@ -7,7 +7,7 @@ import { Reveal } from "@/components/reveal";
 import { getHomepageData, getHomepageMetadata } from "@/lib/homepage";
 import { getLatestNews } from "@/lib/news";
 import { actualitePhotos } from "@/lib/media";
-import { formatFrenchDate } from "@/lib/utils";
+import { formatFrenchDate, isUploadedAssetPath } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -284,6 +284,7 @@ export default async function Home() {
                 src={item.featuredImage || actualitePhotos[index % actualitePhotos.length]}
                 alt={item.title}
                 fill
+                unoptimized={isUploadedAssetPath(item.featuredImage)}
                 className="object-cover transition duration-500 group-hover:scale-105"
                 sizes="(max-width: 1200px) 50vw, 25vw"
               />

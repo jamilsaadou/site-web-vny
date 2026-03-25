@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { Reveal } from "@/components/reveal";
 import { getLatestNews, searchNews, type SectionName } from "@/lib/news";
 import { actualitePhotos } from "@/lib/media";
-import { formatFrenchDate } from "@/lib/utils";
+import { formatFrenchDate, isUploadedAssetPath } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -148,6 +148,7 @@ export default async function ActualitePage({ searchParams }: ActualitePageProps
                       src={item.featuredImage || actualitePhotos[index % actualitePhotos.length]}
                       alt={item.title}
                       fill
+                      unoptimized={isUploadedAssetPath(item.featuredImage)}
                       className="object-cover"
                       sizes="(max-width: 1024px) 100vw, 33vw"
                     />

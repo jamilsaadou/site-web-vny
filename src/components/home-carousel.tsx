@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import type { GalleryItem } from "@/lib/media";
+import { isUploadedAssetPath } from "@/lib/utils";
 
 type HomeCarouselProps = {
   items: GalleryItem[];
@@ -42,7 +43,15 @@ export function HomeCarousel({ items }: HomeCarouselProps) {
             exit={{ opacity: 0, x: -34 }}
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           >
-            <Image src={active.src} alt={active.title} fill className="object-cover" priority sizes="(max-width: 1024px) 100vw, 50vw" />
+            <Image
+              src={active.src}
+              alt={active.title}
+              fill
+              unoptimized={isUploadedAssetPath(active.src)}
+              className="object-cover"
+              priority
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-[rgba(10,18,12,0.74)] via-[rgba(10,18,12,0.2)] to-transparent" />
           </motion.div>
         </AnimatePresence>

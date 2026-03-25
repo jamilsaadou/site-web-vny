@@ -20,3 +20,7 @@ export function slugify(value: string) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 }
+
+export function isUploadedAssetPath(value?: string | null) {
+  return String(value ?? "").startsWith("/uploads/");
+}
