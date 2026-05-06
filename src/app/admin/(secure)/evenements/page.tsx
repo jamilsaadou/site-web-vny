@@ -3,10 +3,18 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logAdminActivity } from "@/lib/activity-log";
+import {
+  compactArticleBlocks,
+  createGalleryImage,
+  getArticleBlockGalleryInputName,
+  getArticleBlockImageInputName,
+  parseArticleBlocks,
+  serializeArticleBlocks,
+} from "@/lib/article-blocks";
 import { ensureDatabaseConfigured, requireAdmin } from "@/lib/admin-auth";
+import { AdminBlockEditor } from "@/components/admin-block-editor";
 import { AdminDeleteDialog } from "@/components/admin-delete-dialog";
 import { AdminImageUploadInput } from "@/components/admin-image-upload-input";
-import { AdminMediaPicker } from "@/components/admin-media-picker";
 import { AdminMultiImageUploadInput } from "@/components/admin-multi-image-upload-input";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedImage } from "@/lib/upload-image";
@@ -37,6 +45,14 @@ function parseDateTime(value: FormDataEntryValue | null) {
   return parsed;
 }
 
+function parseOptionalDateTime(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
 function parseOptionalFloat(value: FormDataEntryValue | null) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
@@ -51,6 +67,47 @@ function parseContentStatus(value: FormDataEntryValue | null): ContentStatus {
   return ContentStatus.PUBLISHED;
 }
 
+async function hydrateEventContent(content: string, formData: FormData, slug: string) {
+  const blocks = parseArticleBlocks(content);
+
+  for (const [index, block] of blocks.entries()) {
+    if (block.type === "image") {
+      const fileEntry = formData.get(getArticleBlockImageInputName(block.id));
+      if (fileEntry instanceof File && fileEntry.size > 0) {
+        block.url = (await saveUploadedImage(fileEntry, `${slug}-bloc-${index + 1}-image`)) ?? block.url ?? "";
+      }
+      continue;
+    }
+
+    if (block.type === "gallery") {
+      const files = formData.getAll(getArticleBlockGalleryInputName(block.id));
+      let appendIndex = block.images.length;
+
+      for (const entry of files) {
+        if (!(entry instanceof File) || entry.size === 0) {
+          continue;
+        }
+
+        const imagePath = await saveUploadedImage(entry, `${slug}-bloc-${index + 1}-gallery-${appendIndex + 1}`);
+        if (!imagePath) {
+          continue;
+        }
+
+        block.images = [
+          ...block.images,
+          createGalleryImage({
+            url: imagePath,
+          }),
+        ];
+        appendIndex += 1;
+      }
+    }
+  }
+
+  const compacted = compactArticleBlocks(blocks);
+  return compacted.length > 0 ? serializeArticleBlocks(compacted) : null;
+}
+
 async function createEventAction(formData: FormData) {
   "use server";
 
@@ -61,7 +118,7 @@ async function createEventAction(formData: FormData) {
   const slugInput = String(formData.get("slug") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const detail = String(formData.get("detail") ?? "").trim();
-  const featuredImageFromPicker = String(formData.get("featuredImage") ?? "").trim();
+  const content = String(formData.get("content") ?? "").trim();
   const featuredImageFile = formData.get("featuredImageFile");
   const galleryFiles = formData.getAll("galleryFiles");
   const seoTitle = String(formData.get("seoTitle") ?? "").trim();
@@ -78,20 +135,29 @@ async function createEventAction(formData: FormData) {
     redirect("/admin/evenements?error=slug");
   }
 
-  let featuredImage = featuredImageFromPicker;
+  let normalizedContent: string | null = null;
+  try {
+    normalizedContent = await hydrateEventContent(content, formData, slug);
+  } catch {
+    redirect("/admin/evenements?error=content-media");
+  }
+
+  let featuredImage = "";
   if (featuredImageFile instanceof File && featuredImageFile.size > 0) {
     try {
-      featuredImage = (await saveUploadedImage(featuredImageFile, `${slug}-event`)) ?? featuredImageFromPicker;
+      featuredImage = (await saveUploadedImage(featuredImageFile, `${slug}-event`)) ?? "";
     } catch {
       redirect("/admin/evenements?error=image");
     }
   }
 
   let startAt: Date;
+  let endAt: Date | null;
   let latitude: number | null;
   let longitude: number | null;
   try {
     startAt = parseDateTime(formData.get("startAt"));
+    endAt = parseOptionalDateTime(formData.get("endAt"));
     latitude = parseOptionalFloat(formData.get("latitude"));
     longitude = parseOptionalFloat(formData.get("longitude"));
   } catch {
@@ -106,6 +172,7 @@ async function createEventAction(formData: FormData) {
         slug,
         location,
         detail,
+        content: normalizedContent,
         featuredImage: featuredImage || null,
         latitude,
         longitude,
@@ -114,11 +181,11 @@ async function createEventAction(formData: FormData) {
         seoDescription: seoDescription || null,
         seoKeywords: seoKeywords || null,
         startAt,
+        endAt,
       },
     });
     eventId = event.id;
 
-    // Save gallery images uploaded during creation
     let sortOrder = 0;
     for (const fileEntry of galleryFiles) {
       if (!(fileEntry instanceof File) || fileEntry.size === 0) continue;
@@ -141,6 +208,7 @@ async function createEventAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/evenement");
   revalidatePath("/admin");
   revalidatePath("/admin/evenements");
   redirect("/admin/evenements?status=created");
@@ -157,7 +225,8 @@ async function updateEventAction(formData: FormData) {
   const slugInput = String(formData.get("slug") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const detail = String(formData.get("detail") ?? "").trim();
-  const featuredImageFromPicker = String(formData.get("featuredImage") ?? "").trim();
+  const content = String(formData.get("content") ?? "").trim();
+  const currentFeaturedImage = String(formData.get("currentFeaturedImage") ?? "").trim();
   const featuredImageFile = formData.get("featuredImageFile");
   const seoTitle = String(formData.get("seoTitle") ?? "").trim();
   const seoDescription = String(formData.get("seoDescription") ?? "").trim();
@@ -173,20 +242,29 @@ async function updateEventAction(formData: FormData) {
     redirect("/admin/evenements?error=slug");
   }
 
-  let featuredImage = featuredImageFromPicker;
+  let normalizedContent: string | null = null;
+  try {
+    normalizedContent = await hydrateEventContent(content, formData, slug);
+  } catch {
+    redirect(`/admin/evenements?error=content-media&edit=${id}`);
+  }
+
+  let featuredImage = currentFeaturedImage;
   if (featuredImageFile instanceof File && featuredImageFile.size > 0) {
     try {
-      featuredImage = (await saveUploadedImage(featuredImageFile, `${slug}-event`)) ?? featuredImageFromPicker;
+      featuredImage = (await saveUploadedImage(featuredImageFile, `${slug}-event`)) ?? currentFeaturedImage;
     } catch {
       redirect("/admin/evenements?error=image");
     }
   }
 
   let startAt: Date;
+  let endAt: Date | null;
   let latitude: number | null;
   let longitude: number | null;
   try {
     startAt = parseDateTime(formData.get("startAt"));
+    endAt = parseOptionalDateTime(formData.get("endAt"));
     latitude = parseOptionalFloat(formData.get("latitude"));
     longitude = parseOptionalFloat(formData.get("longitude"));
   } catch {
@@ -197,13 +275,20 @@ async function updateEventAction(formData: FormData) {
     await prisma.event.update({
       where: { id },
       data: {
-        title, slug, location, detail,
+        title,
+        slug,
+        location,
+        detail,
+        content: normalizedContent,
         featuredImage: featuredImage || null,
-        latitude, longitude, status,
+        latitude,
+        longitude,
+        status,
         seoTitle: seoTitle || null,
         seoDescription: seoDescription || null,
         seoKeywords: seoKeywords || null,
         startAt,
+        endAt,
       },
     });
   } catch {
@@ -218,6 +303,7 @@ async function updateEventAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/evenement");
   revalidatePath("/admin");
   revalidatePath("/admin/evenements");
   redirect(`/admin/evenements?status=updated&edit=${id}`);
@@ -246,52 +332,59 @@ async function deleteEventAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/evenement");
   revalidatePath("/admin");
   revalidatePath("/admin/evenements");
   redirect("/admin/evenements?status=deleted");
 }
 
-async function addGalleryImageAction(formData: FormData) {
+async function addGalleryImagesAction(formData: FormData) {
   "use server";
 
   await requireAdmin();
   ensureDatabaseConfigured();
 
   const eventId = String(formData.get("eventId") ?? "").trim();
-  const imagePathFromPicker = String(formData.get("galleryImage") ?? "").trim();
-  const galleryImageFile = formData.get("galleryImageFile");
-  const caption = String(formData.get("caption") ?? "").trim();
-  const sortOrder = Number(String(formData.get("sortOrder") ?? "0"));
+  const files = formData.getAll("galleryFiles");
 
-  let imagePath = imagePathFromPicker;
-  if (galleryImageFile instanceof File && galleryImageFile.size > 0) {
-    try {
-      imagePath = (await saveUploadedImage(galleryImageFile, `${eventId}-gallery`)) ?? imagePathFromPicker;
-    } catch {
-      redirect("/admin/evenements?error=gallery-image");
-    }
-  }
-
-  if (!eventId || !imagePath) {
+  if (!eventId || files.length === 0) {
     redirect("/admin/evenements?error=gallery-missing");
   }
 
-  const image = await prisma.eventGalleryImage.create({
-    data: {
-      eventId,
-      imagePath,
-      caption: caption || null,
-      sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
-    },
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, slug: true },
   });
+
+  if (!event) {
+    redirect("/admin/evenements?error=gallery-event");
+  }
+
+  const maxSort = await prisma.eventGalleryImage.findFirst({
+    where: { eventId },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true },
+  });
+
+  let sortOrder = (maxSort?.sortOrder ?? -1) + 1;
+  for (const entry of files) {
+    if (!(entry instanceof File) || entry.size === 0) continue;
+    const imagePath = await saveUploadedImage(entry, `${event.slug}-gallery-${sortOrder + 1}`);
+    if (!imagePath) continue;
+    await prisma.eventGalleryImage.create({
+      data: { eventId, imagePath, sortOrder },
+    });
+    sortOrder += 1;
+  }
 
   await logAdminActivity({
     action: "create",
     entityType: "event_gallery_image",
-    entityId: image.id,
-    details: `Ajout image galerie événement ${eventId}`,
+    entityId: eventId,
+    details: `Ajout images galerie événement ${eventId}`,
   });
 
+  revalidatePath("/evenement");
   revalidatePath("/admin/evenements");
   redirect(`/admin/evenements?status=gallery-added&edit=${eventId}`);
 }
@@ -417,6 +510,9 @@ export default async function AdminEvenementsPage({ searchParams }: EvenementsPa
           className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]"
         >
           {isEditMode ? <input type="hidden" name="id" value={editingEvent?.id ?? ""} /> : null}
+          {isEditMode ? (
+            <input type="hidden" name="currentFeaturedImage" value={editingEvent?.featuredImage ?? ""} />
+          ) : null}
 
           <div className="space-y-5 p-5 sm:p-6">
             <div>
@@ -426,19 +522,32 @@ export default async function AdminEvenementsPage({ searchParams }: EvenementsPa
                 placeholder="Titre de l'événement"
                 defaultValue={editingEvent?.title ?? ""}
                 required
-                className="mt-2 w-full rounded-md border border-[#d8dde3] bg-white px-4 py-3 text-2xl font-semibold text-[var(--green-deep)] outline-none focus:border-[rgba(19,136,74,0.35)]"
+                className="mt-2 w-full rounded-md border border-[#d8dde3] bg-white px-4 py-3 text-2xl font-semibold text-[#1f2937] outline-none focus:border-[rgba(19,136,74,0.35)]"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Description</label>
+              <label className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Résumé (chapeau)</label>
               <textarea
                 name="detail"
-                placeholder="Description de l'événement"
+                placeholder="Description courte de l'événement (affichée dans la liste)"
                 defaultValue={editingEvent?.detail ?? ""}
                 required
-                rows={12}
+                rows={4}
                 className="mt-2 w-full rounded-md border border-[#d8dde3] bg-white px-4 py-3 text-sm leading-7 outline-none focus:border-[rgba(19,136,74,0.35)]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
+                Contenu détaillé
+              </label>
+              <AdminBlockEditor
+                key={`content-${formKey}`}
+                name="content"
+                defaultValue={editingEvent?.content ?? ""}
+                className="mt-2"
+                mediaOptions={mediaRows}
               />
             </div>
           </div>
@@ -470,12 +579,21 @@ export default async function AdminEvenementsPage({ searchParams }: EvenementsPa
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-[var(--muted)]">Date et heure</label>
+                <label className="text-xs font-semibold text-[var(--muted)]">Date et heure de début</label>
                 <input
                   type="datetime-local"
                   name="startAt"
                   defaultValue={editingEvent ? toDatetimeLocalValue(editingEvent.startAt) : toDatetimeLocalValue(new Date())}
                   required
+                  className="mt-1 w-full rounded-md border border-[#d8dde3] bg-white px-3 py-2 text-sm outline-none focus:border-[rgba(19,136,74,0.35)]"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--muted)]">Date et heure de fin (optionnel)</label>
+                <input
+                  type="datetime-local"
+                  name="endAt"
+                  defaultValue={editingEvent?.endAt ? toDatetimeLocalValue(editingEvent.endAt) : ""}
                   className="mt-1 w-full rounded-md border border-[#d8dde3] bg-white px-3 py-2 text-sm outline-none focus:border-[rgba(19,136,74,0.35)]"
                 />
               </div>
@@ -513,29 +631,18 @@ export default async function AdminEvenementsPage({ searchParams }: EvenementsPa
                   />
                 </div>
               </div>
-              <AdminMediaPicker
-                key={`featured-picker-${formKey}`}
-                name="featuredImage"
-                items={mediaRows}
-                defaultValue={editingEvent?.featuredImage ?? ""}
-                label="Image mise en avant (galerie)"
-              />
               <AdminImageUploadInput
-                key={`featured-upload-${formKey}`}
+                key={`featured-${formKey}`}
                 name="featuredImageFile"
-                label="Ou importer une nouvelle image"
+                label={isEditMode ? "Remplacer l'image mise en avant" : "Image mise en avant"}
                 defaultPreview={editingEvent?.featuredImage ?? ""}
               />
-              {!isEditMode ? (
-                <AdminMultiImageUploadInput
-                  key={`gallery-${formKey}`}
-                  name="galleryFiles"
-                  label="Galerie (images supplémentaires)"
-                />
-              ) : (
+              {isEditMode ? (
                 <p className="rounded-md border border-[#d8dde3] bg-white px-3 py-2 text-xs text-[#667085]">
-                  La galerie se gère dans la section ci-dessous.
+                  La galerie de cet événement se gère juste en dessous du formulaire.
                 </p>
+              ) : (
+                <AdminMultiImageUploadInput key={`gallery-${formKey}`} name="galleryFiles" label="Galerie événement (import multiple)" />
               )}
             </div>
 
@@ -571,27 +678,11 @@ export default async function AdminEvenementsPage({ searchParams }: EvenementsPa
             <h3 className="text-sm font-semibold text-[#0f6639]">Galerie de l&apos;événement en cours d&apos;édition</h3>
           </div>
           <div className="space-y-4 p-5">
-            <form action={addGalleryImageAction} className="space-y-3">
+            <form action={addGalleryImagesAction} className="space-y-3">
               <input type="hidden" name="eventId" value={editingEvent.id} />
-              <div className="grid gap-3 xl:grid-cols-2">
-                <AdminMediaPicker name="galleryImage" items={mediaRows} label="Choisir dans la médiathèque" />
-                <AdminImageUploadInput name="galleryImageFile" label="Ou importer une image galerie" />
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <input
-                  name="caption"
-                  placeholder="Légende (optionnel)"
-                  className="rounded-md border border-[var(--line)] bg-white px-4 py-3 text-sm outline-none focus:border-[rgba(19,136,74,0.35)]"
-                />
-                <input
-                  type="number"
-                  name="sortOrder"
-                  defaultValue={editingEvent.gallery.length}
-                  className="rounded-md border border-[var(--line)] bg-white px-4 py-3 text-sm outline-none focus:border-[rgba(19,136,74,0.35)]"
-                />
-              </div>
-              <button type="submit" className="btn-ghost w-fit px-4 py-2 text-xs">
-                Ajouter image galerie
+              <AdminMultiImageUploadInput name="galleryFiles" label="Ajouter des images à la galerie" />
+              <button type="submit" className="btn-ghost px-4 py-2 text-xs">
+                Ajouter à la galerie
               </button>
             </form>
 
@@ -604,8 +695,8 @@ export default async function AdminEvenementsPage({ searchParams }: EvenementsPa
                 {editingEvent.gallery.map((image) => (
                   <div key={image.id} className="rounded-md border border-[#d8dde3] bg-white p-2">
                     <img src={image.imagePath} alt={image.caption || "Image galerie"} className="h-28 w-full rounded object-cover" />
-                    <p className="mt-1 truncate text-xs text-[#667085]">
-                      {image.caption || "Sans légende"}
+                    <p className="mt-2 text-xs text-[#667085]">
+                      {image.caption || "Sans légende"} - ordre {image.sortOrder}
                     </p>
                     <AdminDeleteDialog message="Retirer cette image de la galerie ?">
                       <form action={deleteGalleryImageAction} className="mt-2">

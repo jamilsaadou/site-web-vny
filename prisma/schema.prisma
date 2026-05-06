@@ -64,6 +64,7 @@ model Event {
   title          String
   slug           String            @unique
   detail         String
+  content        String?
   featuredImage  String?
   location       String
   latitude       Float?
@@ -73,6 +74,7 @@ model Event {
   seoDescription String?
   seoKeywords    String?
   startAt        DateTime
+  endAt          DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   gallery        EventGalleryImage[]

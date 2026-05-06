@@ -216,7 +216,7 @@ export async function isAdminAuthenticated() {
 export async function requireAdmin() {
   const session = await getAdminSession();
   if (!session) {
-    redirect("/admin/login");
+    return redirect("/admin/login");
   }
 
   return session;
@@ -225,12 +225,12 @@ export async function requireAdmin() {
 export async function requireSuperAdmin() {
   const session = await requireAdmin();
   if (session.role !== "SUPER_ADMIN") {
-    redirect("/admin");
+    return redirect("/admin");
   }
   return session;
 }
 
-export function ensureDatabaseConfigured() {
+export function ensureDatabaseConfigured(): void {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL manquant");
   }
