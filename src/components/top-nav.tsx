@@ -10,6 +10,7 @@ const links = [
   { label: "Accueil", href: "/" },
   { label: "Plan stratégique", href: "/plan-strategique" },
   { label: "Actualité", href: "/actualite" },
+  { label: "Événements", href: "/evenement" },
   { label: "Naneye Yarda", href: "/naneye-yarda" },
   { label: "Le centenaire", href: "/centenaire" },
   { label: "Contact", href: "/contact" },
@@ -78,7 +79,7 @@ export function TopNav() {
                       href={link.href}
                       onClick={() => setOpen(false)}
                       className={cn(
-                        "block rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+                        "block rounded-lg px-3 py-2 text-sm font-semibold transition-colors xl:px-4",
                         active
                           ? "bg-[rgba(240,122,20,0.14)] text-[var(--orange-strong)]"
                           : "text-[var(--text)] hover:bg-[rgba(19,136,74,0.1)] hover:text-[var(--green-deep)]",

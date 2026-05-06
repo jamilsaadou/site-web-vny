@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SiteAnalytics } from "@/components/site-analytics";
 import { SiteFooter } from "@/components/site-footer";
 import { TopNav } from "@/components/top-nav";
 
@@ -16,6 +17,7 @@ export default function SiteLayout({
   return (
     <>
       <TopNav />
+      <SiteAnalytics />
       {children}
       <SiteFooter />
     </>

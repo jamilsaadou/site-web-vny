@@ -142,6 +142,19 @@ const adminSections: Section[] = [
           </svg>
         ),
       },
+      {
+        href: "/admin/statistiques",
+        label: "Statistiques",
+        icon: (
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M4 19V5" />
+            <path d="M4 19h16" />
+            <rect x="7" y="11" width="3" height="5" rx="1" />
+            <rect x="12" y="7" width="3" height="9" rx="1" />
+            <rect x="17" y="4" width="3" height="12" rx="1" />
+          </svg>
+        ),
+      },
     ],
   },
 ];

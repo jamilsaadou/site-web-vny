@@ -4,6 +4,7 @@ import Link from "next/link";
 import { EventCountdown } from "@/components/event-countdown";
 import { HomeCarousel } from "@/components/home-carousel";
 import { Reveal } from "@/components/reveal";
+import { getUpcomingEvents } from "@/lib/events";
 import { getHomepageData, getHomepageMetadata } from "@/lib/homepage";
 import { getLatestNews } from "@/lib/news";
 import { actualitePhotos } from "@/lib/media";
@@ -62,22 +63,6 @@ const impactFigures: ImpactFigure[] = [
     detail: "Tournées hebdomadaires de collecte et de curage renforcées.",
   },
 ];
-
-const featuredEvent = {
-  title: "Journée de salubrité publique",
-  edition: "23ème édition",
-  targetDate: "2026-03-29T08:00:00+01:00",
-  location: "Grandes artères et secteurs de nettoyage des 5 arrondissements de Niamey",
-  message: "La Propreté de la Capitale C'est l'Affaire de Tous",
-  callout: "Mobilisons-nous pour la salubrité et le désencombrement de nos grandes artères.",
-  sectors: [
-    "ACN 1 : Rond-point Sikiyé - Rond-point Gadafawa - Rond-point cimetière - Koubia poste.",
-    "ACN 2 : Rond-point Sikiyé - Échangeur Mali Bero - Rond-point Francophonie - Koira Tegui.",
-    "ACN 3 : STM-Bonkaney - Rond-point Kokorobado.",
-    "ACN 4 : Rond-point 6ème - route Aéroport.",
-    "ACN 5 : Rond-point Liptako - Say Tessam - Rond-point Saguia - route Say.",
-  ],
-};
 
 function ImpactIcon({ icon }: { icon: ImpactIconName }) {
   const commonProps = {
@@ -138,9 +123,20 @@ function ImpactIcon({ icon }: { icon: ImpactIconName }) {
   }
 }
 
+function formatEventTime(date: Date) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 export default async function Home() {
-  const homepageData = await getHomepageData();
-  const latestNews = await getLatestNews(6);
+  const [homepageData, latestNews, upcomingEvents] = await Promise.all([
+    getHomepageData(),
+    getLatestNews(6),
+    getUpcomingEvents(1),
+  ]);
+  const upcomingEvent = upcomingEvents[0] ?? null;
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-20 sm:px-6 lg:px-8">
@@ -198,67 +194,81 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="relative right-1/2 left-1/2 my-10 w-screen -translate-x-1/2 border-y border-[var(--line)] bg-[linear-gradient(130deg,rgba(15,102,57,0.95),rgba(11,78,44,0.95))] py-10">
-        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
-          <Reveal className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[rgba(255,206,161,0.95)]">
-                Événement à venir
-              </p>
-              <h2 className="display-font mt-2 text-2xl font-extrabold text-white sm:text-3xl">
-                Journée de salubrité publique
-              </h2>
-            </div>
-            <span className="rounded-full border border-white/24 bg-white/12 px-4 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
-              {featuredEvent.edition}
-            </span>
-          </Reveal>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-            <Reveal>
-              <EventCountdown
-                targetDate={featuredEvent.targetDate}
-                title={featuredEvent.title}
-                location={featuredEvent.location}
-              />
-            </Reveal>
-
-            <Reveal className="rounded-2xl border border-white/22 bg-white/12 p-5 text-white backdrop-blur-md sm:p-6">
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
-                  Dimanche 29 mars 2026
-                </span>
-                <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
-                  Dès 08h00
-                </span>
-              </div>
-
-              <h3 className="mt-4 text-2xl leading-tight font-extrabold text-white sm:text-3xl">
-                {featuredEvent.message}
-              </h3>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/90 sm:text-base">
-                {featuredEvent.callout}
-              </p>
-
-              <div className="mt-6 rounded-xl border border-white/18 bg-black/18 p-4 sm:p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[rgba(255,211,174,0.95)]">
-                  Secteurs de nettoyage
+      {upcomingEvent ? (
+        <section className="relative right-1/2 left-1/2 my-10 w-screen -translate-x-1/2 border-y border-[var(--line)] bg-[linear-gradient(130deg,rgba(15,102,57,0.95),rgba(11,78,44,0.95))] py-10">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+            <Reveal className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[rgba(255,206,161,0.95)]">
+                  Événement à venir
                 </p>
-                <div className="mt-4 space-y-3">
-                  {featuredEvent.sectors.map((sector, index) => (
-                    <div key={sector} className="flex items-start gap-3">
-                      <span className="mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[rgba(240,122,20,0.24)] text-xs font-bold text-white">
-                        {index + 1}
-                      </span>
-                      <p className="text-sm leading-6 text-white/92">{sector}</p>
-                    </div>
-                  ))}
-                </div>
+                <h2 className="display-font mt-2 text-2xl font-extrabold text-white sm:text-3xl">
+                  {upcomingEvent.title}
+                </h2>
               </div>
+              <Link
+                href="/evenement"
+                className="rounded-full border border-white/24 bg-white/12 px-4 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)] transition hover:bg-white/20"
+              >
+                Tous les événements
+              </Link>
             </Reveal>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+              <Reveal>
+                <EventCountdown
+                  targetDate={upcomingEvent.startAt.toISOString()}
+                  title={upcomingEvent.title}
+                  location={upcomingEvent.location}
+                />
+              </Reveal>
+
+              <Reveal className="overflow-hidden rounded-2xl border border-white/22 bg-white/12 text-white backdrop-blur-md">
+                {upcomingEvent.featuredImage ? (
+                  <div className="relative h-56 w-full">
+                    <Image
+                      src={upcomingEvent.featuredImage}
+                      alt={upcomingEvent.title}
+                      fill
+                      unoptimized={isUploadedAssetPath(upcomingEvent.featuredImage)}
+                      className="object-cover"
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[rgba(5,13,8,0.76)] to-transparent" />
+                  </div>
+                ) : null}
+
+                <div className="p-5 sm:p-6">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
+                      {formatFrenchDate(upcomingEvent.startAt)}
+                    </span>
+                    <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[rgba(255,222,189,0.95)]">
+                      Dès {formatEventTime(upcomingEvent.startAt)}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-4 text-2xl leading-tight font-extrabold text-white sm:text-3xl">
+                    {upcomingEvent.title}
+                  </h3>
+                  <p className="mt-3 max-w-2xl text-sm leading-7 text-white/90 sm:text-base">
+                    {upcomingEvent.detail}
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Link href={`/evenement/${upcomingEvent.slug}`} className="btn-primary px-5 py-2 text-sm">
+                      Voir le détail
+                    </Link>
+                    <Link href="/evenement" className="rounded-xl border border-white/24 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/14">
+                      Liste des événements
+                    </Link>
+                  </div>
+                </div>
+              </Reveal>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section className="py-12">
         <Reveal className="flex flex-wrap items-end justify-between gap-4">

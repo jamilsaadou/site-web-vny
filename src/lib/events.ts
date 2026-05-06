@@ -105,13 +105,9 @@ export async function getUpcomingEvents(limit = 2): Promise<MunicipalEvent[]> {
       },
     });
 
-    if (rows.length === 0) {
-      return demoEvents.slice(0, limit);
-    }
-
     return rows.map(withGalleryFallback);
   } catch {
-    return demoEvents.slice(0, limit);
+    return [];
   }
 }
 
@@ -146,13 +142,9 @@ export async function getAllEvents(limit = 50): Promise<MunicipalEvent[]> {
       },
     });
 
-    if (rows.length === 0) {
-      return demoEvents;
-    }
-
     return rows.map(withGalleryFallback);
   } catch {
-    return demoEvents;
+    return [];
   }
 }
 
@@ -172,7 +164,7 @@ export async function getEventBySlug(slug: string): Promise<MunicipalEvent | nul
     });
 
     if (!event || event.status !== ContentStatus.PUBLISHED) {
-      return demoEvents.find((e) => e.slug === slug) ?? null;
+      return null;
     }
 
     return {
@@ -197,6 +189,6 @@ export async function getEventBySlug(slug: string): Promise<MunicipalEvent | nul
       })),
     };
   } catch {
-    return demoEvents.find((e) => e.slug === slug) ?? null;
+    return null;
   }
 }
