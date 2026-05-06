@@ -1,4 +1,4 @@
-import { ContentStatus, NewsCategory } from "@prisma/client";
+import { ContentStatus, NewsCategory, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type SectionName = "Actualité" | "Naneye Yarda" | "Le centenaire";
@@ -37,6 +37,12 @@ type NewsRow = {
   seoDescription: string | null;
   seoKeywords: string | null;
   publishedAt: Date;
+  gallery?: {
+    id: string;
+    imagePath: string;
+    caption: string | null;
+    sortOrder: number;
+  }[];
 };
 
 const categoryLabel: Record<NewsCategory, SectionName> = {
@@ -64,7 +70,17 @@ const newsSelect = {
   seoDescription: true,
   seoKeywords: true,
   publishedAt: true,
-} as const;
+  gallery: {
+    orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+    take: 1,
+    select: {
+      id: true,
+      imagePath: true,
+      caption: true,
+      sortOrder: true,
+    },
+  },
+} satisfies Prisma.ActualiteSelect;
 
 const demoNews: NewsItem[] = [
   {
@@ -109,6 +125,8 @@ const demoNews: NewsItem[] = [
 ];
 
 function mapRowToNewsItem(row: NewsRow): NewsItem {
+  const firstGalleryImage = row.gallery?.[0]?.imagePath ?? null;
+
   return {
     id: row.id,
     slug: row.slug,
@@ -117,7 +135,8 @@ function mapRowToNewsItem(row: NewsRow): NewsItem {
     content: row.content,
     section: categoryLabel[row.category] ?? "Actualité",
     location: row.location,
-    featuredImage: row.featuredImage,
+    featuredImage: row.featuredImage || firstGalleryImage,
+    gallery: row.gallery,
     seoTitle: row.seoTitle,
     seoDescription: row.seoDescription,
     seoKeywords: row.seoKeywords,

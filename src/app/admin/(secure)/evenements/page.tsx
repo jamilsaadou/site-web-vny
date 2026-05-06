@@ -187,14 +187,25 @@ async function createEventAction(formData: FormData) {
     eventId = event.id;
 
     let sortOrder = 0;
+    let firstGalleryPath = "";
     for (const fileEntry of galleryFiles) {
       if (!(fileEntry instanceof File) || fileEntry.size === 0) continue;
       const galleryPath = await saveUploadedImage(fileEntry, `${slug}-gallery-${sortOrder + 1}`);
       if (!galleryPath) continue;
+      if (!firstGalleryPath) {
+        firstGalleryPath = galleryPath;
+      }
       await prisma.eventGalleryImage.create({
         data: { eventId: event.id, imagePath: galleryPath, sortOrder },
       });
       sortOrder += 1;
+    }
+
+    if (!featuredImage && firstGalleryPath) {
+      await prisma.event.update({
+        where: { id: event.id },
+        data: { featuredImage: firstGalleryPath },
+      });
     }
   } catch {
     redirect("/admin/evenements?error=create");
@@ -209,6 +220,7 @@ async function createEventAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/evenement");
+  revalidatePath(`/evenement/${slug}`);
   revalidatePath("/admin");
   revalidatePath("/admin/evenements");
   redirect("/admin/evenements?status=created");
@@ -304,6 +316,7 @@ async function updateEventAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/evenement");
+  revalidatePath(`/evenement/${slug}`);
   revalidatePath("/admin");
   revalidatePath("/admin/evenements");
   redirect(`/admin/evenements?status=updated&edit=${id}`);
@@ -353,7 +366,7 @@ async function addGalleryImagesAction(formData: FormData) {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, slug: true },
+    select: { id: true, slug: true, featuredImage: true },
   });
 
   if (!event) {
@@ -367,14 +380,25 @@ async function addGalleryImagesAction(formData: FormData) {
   });
 
   let sortOrder = (maxSort?.sortOrder ?? -1) + 1;
+  let firstUploadedImage = "";
   for (const entry of files) {
     if (!(entry instanceof File) || entry.size === 0) continue;
     const imagePath = await saveUploadedImage(entry, `${event.slug}-gallery-${sortOrder + 1}`);
     if (!imagePath) continue;
+    if (!firstUploadedImage) {
+      firstUploadedImage = imagePath;
+    }
     await prisma.eventGalleryImage.create({
       data: { eventId, imagePath, sortOrder },
     });
     sortOrder += 1;
+  }
+
+  if (!event.featuredImage && firstUploadedImage) {
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { featuredImage: firstUploadedImage },
+    });
   }
 
   await logAdminActivity({
@@ -385,6 +409,7 @@ async function addGalleryImagesAction(formData: FormData) {
   });
 
   revalidatePath("/evenement");
+  revalidatePath(`/evenement/${event.slug}`);
   revalidatePath("/admin/evenements");
   redirect(`/admin/evenements?status=gallery-added&edit=${eventId}`);
 }

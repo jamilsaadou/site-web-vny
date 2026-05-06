@@ -1,4 +1,4 @@
-import { ContentStatus } from "@prisma/client";
+import { ContentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type EventGalleryImage = {
@@ -54,6 +54,23 @@ const demoEvents: MunicipalEvent[] = [
   },
 ];
 
+const eventGalleryPreviewSelect = {
+  orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+  take: 1,
+  select: {
+    id: true,
+    imagePath: true,
+    caption: true,
+  },
+} satisfies Prisma.Event$galleryArgs;
+
+function withGalleryFallback(event: MunicipalEvent): MunicipalEvent {
+  return {
+    ...event,
+    featuredImage: event.featuredImage || event.gallery?.[0]?.imagePath || null,
+  };
+}
+
 export async function getUpcomingEvents(limit = 2): Promise<MunicipalEvent[]> {
   if (!process.env.DATABASE_URL) {
     return demoEvents.slice(0, limit);
@@ -84,6 +101,7 @@ export async function getUpcomingEvents(limit = 2): Promise<MunicipalEvent[]> {
         seoKeywords: true,
         startAt: true,
         endAt: true,
+        gallery: eventGalleryPreviewSelect,
       },
     });
 
@@ -91,7 +109,7 @@ export async function getUpcomingEvents(limit = 2): Promise<MunicipalEvent[]> {
       return demoEvents.slice(0, limit);
     }
 
-    return rows;
+    return rows.map(withGalleryFallback);
   } catch {
     return demoEvents.slice(0, limit);
   }
@@ -124,6 +142,7 @@ export async function getAllEvents(limit = 50): Promise<MunicipalEvent[]> {
         seoKeywords: true,
         startAt: true,
         endAt: true,
+        gallery: eventGalleryPreviewSelect,
       },
     });
 
@@ -131,7 +150,7 @@ export async function getAllEvents(limit = 50): Promise<MunicipalEvent[]> {
       return demoEvents;
     }
 
-    return rows;
+    return rows.map(withGalleryFallback);
   } catch {
     return demoEvents;
   }
@@ -163,7 +182,7 @@ export async function getEventBySlug(slug: string): Promise<MunicipalEvent | nul
       detail: event.detail,
       content: event.content,
       location: event.location,
-      featuredImage: event.featuredImage,
+      featuredImage: event.featuredImage || event.gallery[0]?.imagePath || null,
       latitude: event.latitude,
       longitude: event.longitude,
       seoTitle: event.seoTitle,

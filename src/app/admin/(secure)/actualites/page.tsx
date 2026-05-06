@@ -194,6 +194,7 @@ async function createActualiteAction(formData: FormData) {
     createdId = created.id;
 
     let sortOrder = 0;
+    let firstGalleryPath = "";
     for (const fileEntry of galleryFiles) {
       if (!(fileEntry instanceof File) || fileEntry.size === 0) {
         continue;
@@ -204,6 +205,10 @@ async function createActualiteAction(formData: FormData) {
         continue;
       }
 
+      if (!firstGalleryPath) {
+        firstGalleryPath = galleryPath;
+      }
+
       await prisma.actualiteGalleryImage.create({
         data: {
           actualiteId: created.id,
@@ -212,6 +217,13 @@ async function createActualiteAction(formData: FormData) {
         },
       });
       sortOrder += 1;
+    }
+
+    if (!featuredImage && firstGalleryPath) {
+      await prisma.actualite.update({
+        where: { id: created.id },
+        data: { featuredImage: firstGalleryPath },
+      });
     }
   } catch {
     createError = true;
@@ -230,6 +242,7 @@ async function createActualiteAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/actualite");
+  revalidatePath(`/actualite/${slug}`);
   revalidatePath("/admin");
   revalidatePath("/admin/actualites");
   return redirect(redirectUrl);
@@ -338,6 +351,7 @@ async function updateActualiteAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/actualite");
+  revalidatePath(`/actualite/${slug}`);
   revalidatePath("/admin");
   revalidatePath("/admin/actualites");
   return redirect(`/admin/actualites?status=updated&edit=${id}`);
@@ -360,7 +374,7 @@ async function addActualiteGalleryImagesAction(formData: FormData) {
 
   const article = await prisma.actualite.findUnique({
     where: { id: actualiteId },
-    select: { id: true, slug: true },
+    select: { id: true, slug: true, featuredImage: true },
   });
 
   if (!article) {
@@ -374,6 +388,7 @@ async function addActualiteGalleryImagesAction(formData: FormData) {
   });
 
   let sortOrder = (maxSort?.sortOrder ?? -1) + 1;
+  let firstUploadedImage = "";
   for (const entry of files) {
     if (!(entry instanceof File) || entry.size === 0) {
       continue;
@@ -382,6 +397,10 @@ async function addActualiteGalleryImagesAction(formData: FormData) {
     const imagePath = await saveUploadedImage(entry, `${article.slug}-gallery-${sortOrder + 1}`);
     if (!imagePath) {
       continue;
+    }
+
+    if (!firstUploadedImage) {
+      firstUploadedImage = imagePath;
     }
 
     await prisma.actualiteGalleryImage.create({
@@ -394,6 +413,13 @@ async function addActualiteGalleryImagesAction(formData: FormData) {
     sortOrder += 1;
   }
 
+  if (!article.featuredImage && firstUploadedImage) {
+    await prisma.actualite.update({
+      where: { id: actualiteId },
+      data: { featuredImage: firstUploadedImage },
+    });
+  }
+
   await logAdminActivity({
     action: "create",
     entityType: "actualite_gallery_image",
@@ -403,6 +429,7 @@ async function addActualiteGalleryImagesAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/actualite");
+  revalidatePath(`/actualite/${article.slug}`);
   revalidatePath("/admin/actualites");
   return redirect(`/admin/actualites?status=gallery-added&edit=${actualiteId}`);
 }
