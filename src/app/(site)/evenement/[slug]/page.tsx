@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArticleBlockRenderer } from "@/components/article-block-renderer";
@@ -23,10 +24,42 @@ export async function generateMetadata({ params }: EvenementDetailPageProps): Pr
     };
   }
 
+  const headerStore = await headers();
+  const origin = getRequestOrigin(headerStore);
+  const eventUrl = `${origin}/evenement/${event.slug}`;
+  const title = event.seoTitle || `${event.title} | Ville de Niamey`;
+  const description = event.seoDescription || event.detail;
+  const imagePath = event.featuredImage || event.gallery?.[0]?.imagePath;
+  const imageUrl = imagePath ? toAbsoluteUrl(origin, imagePath) : undefined;
+
   return {
-    title: event.seoTitle || `${event.title} | Ville de Niamey`,
-    description: event.seoDescription || event.detail,
+    title,
+    description,
     keywords: event.seoKeywords || "événement niamey, mairie",
+    openGraph: {
+      title,
+      description,
+      url: eventUrl,
+      siteName: "Ville de Niamey",
+      type: "article",
+      publishedTime: event.startAt.toISOString(),
+      images: imageUrl
+        ? [
+            {
+              url: imageUrl,
+              width: 1600,
+              height: 1000,
+              alt: event.title,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: imageUrl ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: imageUrl ? [imageUrl] : undefined,
+    },
   };
 }
 
@@ -41,6 +74,22 @@ function formatEventTime(date: Date) {
     minute: "2-digit",
     timeZone: "Africa/Niamey",
   });
+}
+
+function getRequestOrigin(headerStore: Headers) {
+  const forwardedHost = headerStore.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || headerStore.get("host")?.split(",")[0]?.trim() || "localhost:3000";
+  const forwardedProto = headerStore.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  return `${protocol}://${host}`;
+}
+
+function toAbsoluteUrl(origin: string, path: string) {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export default async function EvenementDetailPage({ params }: EvenementDetailPageProps) {

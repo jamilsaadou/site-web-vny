@@ -25,10 +25,42 @@ export async function generateMetadata({ params }: ActualiteDetailPageProps): Pr
     };
   }
 
+  const headerStore = await headers();
+  const origin = getRequestOrigin(headerStore);
+  const articleUrl = `${origin}/actualite/${article.slug}`;
+  const title = article.seoTitle || `${article.title} | Ville de Niamey`;
+  const description = article.seoDescription || article.excerpt;
+  const imagePath = article.featuredImage || article.gallery?.[0]?.imagePath;
+  const imageUrl = imagePath ? toAbsoluteUrl(origin, imagePath) : undefined;
+
   return {
-    title: article.seoTitle || `${article.title} | Ville de Niamey`,
-    description: article.seoDescription || article.excerpt,
+    title,
+    description,
     keywords: article.seoKeywords || "actualité niamey, mairie",
+    openGraph: {
+      title,
+      description,
+      url: articleUrl,
+      siteName: "Ville de Niamey",
+      type: "article",
+      publishedTime: article.publishedAt.toISOString(),
+      images: imageUrl
+        ? [
+            {
+              url: imageUrl,
+              width: 1600,
+              height: 1000,
+              alt: article.title,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: imageUrl ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: imageUrl ? [imageUrl] : undefined,
+    },
   };
 }
 
@@ -43,6 +75,14 @@ function getRequestOrigin(headerStore: Headers) {
   const forwardedProto = headerStore.get("x-forwarded-proto")?.split(",")[0]?.trim();
   const protocol = forwardedProto || (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
   return `${protocol}://${host}`;
+}
+
+function toAbsoluteUrl(origin: string, path: string) {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export default async function ActualiteDetailPage({ params }: ActualiteDetailPageProps) {

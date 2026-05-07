@@ -128,10 +128,6 @@ export function ArticleShareButtons({ title, url }: ArticleShareButtonsProps) {
           <span>X</span>
         </ShareLinkButton>
       </div>
-
-      <p className="text-xs leading-6 text-[var(--muted)]">
-        Pour TikTok, le lien de l&apos;article est copié puis TikTok s&apos;ouvre dans un nouvel onglet.
-      </p>
     </div>
   );
 }
