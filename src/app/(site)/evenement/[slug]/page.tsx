@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArticleBlockRenderer } from "@/components/article-block-renderer";
+import { EventCountdown } from "@/components/event-countdown";
 import { Reveal } from "@/components/reveal";
 import { getEventBySlug, getAllEvents } from "@/lib/events";
 import { formatFrenchDate, isUploadedAssetPath } from "@/lib/utils";
@@ -92,6 +93,22 @@ function toAbsoluteUrl(origin: string, path: string) {
   return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function getOsmMapData(latitude: number, longitude: number) {
+  const delta = 0.012;
+  const west = longitude - delta;
+  const south = latitude - delta;
+  const east = longitude + delta;
+  const north = latitude + delta;
+  const bbox = [west, south, east, north].map((value) => value.toFixed(6)).join("%2C");
+  const marker = `${latitude.toFixed(6)}%2C${longitude.toFixed(6)}`;
+
+  return {
+    embedUrl: `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`,
+    viewUrl: `https://www.openstreetmap.org/?mlat=${latitude.toFixed(6)}&mlon=${longitude.toFixed(6)}#map=17/${latitude.toFixed(6)}/${longitude.toFixed(6)}`,
+    googleUrl: `https://www.google.com/maps?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`,
+  };
+}
+
 export default async function EvenementDetailPage({ params }: EvenementDetailPageProps) {
   const { slug } = await params;
   const event = await getEventBySlug(slug);
@@ -100,7 +117,14 @@ export default async function EvenementDetailPage({ params }: EvenementDetailPag
   }
 
   const heroImage = event.featuredImage || event.gallery?.[0]?.imagePath;
-  const isPast = new Date(event.startAt) < new Date();
+  const now = new Date();
+  const eventHasStarted = new Date(event.startAt) <= now;
+  const eventIsPast = new Date(event.endAt ?? event.startAt) < now;
+  const eventStatusLabel = eventIsPast ? "Événement passé" : eventHasStarted ? "En cours" : "À venir";
+  const latitude = event.latitude;
+  const longitude = event.longitude;
+  const hasCoordinates = typeof latitude === "number" && typeof longitude === "number";
+  const mapData = hasCoordinates ? getOsmMapData(latitude, longitude) : null;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-20 sm:px-6 lg:px-8">
@@ -111,8 +135,8 @@ export default async function EvenementDetailPage({ params }: EvenementDetailPag
           </Link>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isPast ? "bg-gray-100 text-gray-600" : "bg-[var(--green-deep)] text-white"}`}>
-              {isPast ? "Événement passé" : "À venir"}
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${eventIsPast ? "bg-gray-100 text-gray-600" : "bg-[var(--green-deep)] text-white"}`}>
+              {eventStatusLabel}
             </span>
             <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--orange-strong)]">
               {formatFrenchDate(event.startAt)} à {formatEventTime(event.startAt)}
@@ -123,32 +147,6 @@ export default async function EvenementDetailPage({ params }: EvenementDetailPag
             {event.title}
           </h1>
           <p className="mt-4 text-sm leading-8 text-[var(--muted)]">{event.detail}</p>
-          
-          <div className="mt-6 flex flex-wrap gap-6">
-            <div className="flex items-start gap-2">
-              <span className="text-lg">📍</span>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Lieu</p>
-                <p className="text-sm font-medium text-[var(--green-deep)]">{event.location}</p>
-              </div>
-            </div>
-            {event.latitude && event.longitude && (
-              <div className="flex items-start gap-2">
-                <span className="text-lg">🗺️</span>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Coordonnées</p>
-                  <a
-                    href={`https://www.google.com/maps?q=${event.latitude},${event.longitude}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium text-[var(--orange-strong)] hover:underline"
-                  >
-                    Voir sur Google Maps
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
         </Reveal>
 
         {heroImage ? (
@@ -164,11 +162,104 @@ export default async function EvenementDetailPage({ params }: EvenementDetailPag
           </Reveal>
         ) : null}
 
+        <Reveal className="mt-8">
+          <EventCountdown
+            targetDate={event.startAt.toISOString()}
+            title={event.title}
+            location={event.location}
+            eyebrow={eventIsPast ? "Événement passé" : eventHasStarted ? "Événement en cours" : "Compte à rebours"}
+            completedLabel={eventIsPast ? "L'événement est terminé." : "L'événement est en cours."}
+          />
+        </Reveal>
+
         {event.content ? (
           <Reveal className="mt-10">
             <ArticleBlockRenderer content={event.content} />
           </Reveal>
         ) : null}
+
+        <Reveal className="mt-12">
+          <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_24px_60px_rgba(14,38,27,0.12)]">
+            <div className="grid gap-0 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="p-6 sm:p-7">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--orange-strong)]">Localisation</p>
+                <h2 className="mt-2 text-2xl font-extrabold text-[var(--green-deep)]">Lieu de l&apos;événement</h2>
+                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{event.location}</p>
+
+                {hasCoordinates ? (
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">Latitude</p>
+                      <p className="mt-1 text-sm font-extrabold text-[var(--green-deep)]">{latitude.toFixed(6)}</p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">Longitude</p>
+                      <p className="mt-1 text-sm font-extrabold text-[var(--green-deep)]">{longitude.toFixed(6)}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-[rgba(19,136,74,0.18)] bg-[rgba(19,136,74,0.08)] px-3 py-1 text-xs font-semibold text-[var(--green-deep)]">
+                    Axes routiers
+                  </span>
+                  <span className="rounded-full border border-[rgba(19,136,74,0.18)] bg-[rgba(19,136,74,0.08)] px-3 py-1 text-xs font-semibold text-[var(--green-deep)]">
+                    Points d&apos;intérêt
+                  </span>
+                  <span className="rounded-full border border-[rgba(19,136,74,0.18)] bg-[rgba(19,136,74,0.08)] px-3 py-1 text-xs font-semibold text-[var(--green-deep)]">
+                    Quartiers
+                  </span>
+                  <span className="rounded-full border border-[rgba(19,136,74,0.18)] bg-[rgba(19,136,74,0.08)] px-3 py-1 text-xs font-semibold text-[var(--green-deep)]">
+                    Services proches
+                  </span>
+                </div>
+
+                {mapData ? (
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <a
+                      href={mapData.viewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-primary px-5 py-2 text-sm"
+                    >
+                      Ouvrir OpenStreetMap
+                    </a>
+                    <a
+                      href={mapData.googleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-ghost px-5 py-2 text-sm"
+                    >
+                      Itinéraire
+                    </a>
+                  </div>
+                ) : (
+                  <p className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">
+                    Les coordonnées GPS seront affichées dès qu&apos;elles seront ajoutées dans le back office.
+                  </p>
+                )}
+              </div>
+
+              <div className="min-h-[22rem] border-t border-[var(--line)] bg-[var(--surface-soft)] lg:border-t-0 lg:border-l">
+                {mapData ? (
+                  <iframe
+                    title={`Carte OpenStreetMap - ${event.title}`}
+                    src={mapData.embedUrl}
+                    className="h-[22rem] w-full border-0 lg:h-full"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                ) : (
+                  <div className="flex h-full min-h-[22rem] items-center justify-center p-8 text-center">
+                    <p className="max-w-sm text-sm leading-7 text-[var(--muted)]">
+                      Ajoutez latitude et longitude dans l&apos;admin pour activer la carte.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </Reveal>
 
         {event.gallery && event.gallery.length > 0 ? (
           <section className="mt-12">

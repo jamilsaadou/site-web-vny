@@ -6,6 +6,8 @@ type EventCountdownProps = {
   targetDate: string;
   title: string;
   location: string;
+  eyebrow?: string;
+  completedLabel?: string;
 };
 
 type Remaining = {
@@ -42,7 +44,13 @@ function CounterBox({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function EventCountdown({ targetDate, title, location }: EventCountdownProps) {
+export function EventCountdown({
+  targetDate,
+  title,
+  location,
+  eyebrow = "Événement à venir",
+  completedLabel = "L'événement est en cours.",
+}: EventCountdownProps) {
   const [remaining, setRemaining] = useState<Remaining>(() => getRemaining(targetDate));
 
   useEffect(() => {
@@ -64,14 +72,14 @@ export function EventCountdown({ targetDate, title, location }: EventCountdownPr
 
   return (
     <div className="soft-card p-6 sm:p-7">
-      <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--orange-strong)]">Événement à venir</p>
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--orange-strong)]">{eyebrow}</p>
       <h3 className="display-font mt-2 text-2xl font-extrabold text-[var(--green-deep)] sm:text-3xl">{title}</h3>
       <p className="mt-2 text-sm text-[var(--muted)]">{location}</p>
       <p className="mt-1 text-sm text-[var(--muted)]">{formattedDate}</p>
 
       {remaining.isOver ? (
         <p className="mt-6 rounded-lg bg-[rgba(19,136,74,0.12)] px-4 py-3 text-sm font-semibold text-[var(--green-deep)]">
-          L&apos;événement est en cours.
+          {completedLabel}
         </p>
       ) : (
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
